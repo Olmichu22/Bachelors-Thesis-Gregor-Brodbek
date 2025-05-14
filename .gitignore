@@ -2,6 +2,9 @@
 *.onnx
 *.npy
 *.pth
+*.npz
+*.pt
+*.sif
 # root files
 *.root
 

@@ -90,7 +90,7 @@ def model_setup(args, data_config):
     model, model_info = network_module.get_model(
         data_config, args=args, dev=dev, **network_options
     )
-    return model.mod
+    return model.mod, model_info
 
 
 def get_gpu_dev(args):
@@ -114,7 +114,7 @@ def main():
     else:
         test_loaders, data_config = test_load(args)
 
-    model = model_setup(args, data_config)
+    model, model_info = model_setup(args, data_config)
     if args.gpus:
         gpus = [int(i) for i in args.gpus.split(",")]
         print("Using GPUs:", gpus)
@@ -129,6 +129,9 @@ def main():
         log_model="all",
     )
     if training_mode:
+        print("\n\n\n")
+        print("Training data")
+        print("\n\n\n")
         # wandb.init(project=args.wandb_projectname, entity=args.wandb_entity)
         # wandb.run.name = args.wandb_displayname
         # if args.load_model_weights is not None and args.correction:
@@ -144,7 +147,7 @@ def main():
             )
 
             model = GravnetModel.load_from_checkpoint(
-                args.load_model_weights, args=args, dev=0
+                args.load_model_weights, args=args, dev=0, strict=False
             )
 
         accelerator, devices = get_gpu_dev(args)
@@ -194,9 +197,11 @@ def main():
         # TODO use accumulate_grad_batches=7
 
     if args.data_test:
+        print("\n\n\n")
+        print("Testing data")
+        print("\n\n\n")
         if args.load_model_weights is not None:
             from src.models.Gatr_pf_e_tau_rho import ExampleWrapper as GravnetModel
-
             model = GravnetModel.load_from_checkpoint(
                 args.load_model_weights, args=args, dev=0, strict=False
             )
@@ -218,7 +223,7 @@ def main():
                 #ckpt_path=args.load_model_weights,
                 dataloaders=test_loader,
             )
-
+        torch.save(model.state_dict(), "FinalModel/ModelState.pth")
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,22 @@
+Real 1,Real 2,Pred 1 num,Pred 2 num,Pred 1 id,Pred 2 id
+2,2,4,6,pi_2pi0,3pi_pi0
+2,-11,4,0,pi_2pi0,e
+-13,-13,1,1,mu,mu
+10,-11,6,0,3pi_pi0,e
+10,3,5,4,3pi,pi_2pi0
+2,1,6,2,3pi_pi0,pi_pi0
+1,-13,2,1,pi_pi0,mu
+0,10,5,3,3pi,pi
+0,1,2,3,pi_pi0,pi
+-11,0,2,3,pi_pi0,pi
+-13,-11,2,1,pi_pi0,mu
+10,-13,8,8,Bhabha,Bhabha
+3,10,4,5,pi_2pi0,3pi
+1,-11,0,2,e,pi_pi0
+1,1,4,2,pi_2pi0,pi_pi0
+3,0,2,3,pi_pi0,pi
+-11,10,0,6,e,3pi_pi0
+1,0,2,3,pi_pi0,pi
+0,0,3,3,pi,pi
+1,11,2,5,pi_pi0,3pi
+10,-13,5,1,3pi,mu

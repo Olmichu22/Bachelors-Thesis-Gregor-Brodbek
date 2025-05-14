@@ -1,0 +1,10 @@
+#+CieRunInGpu=True
++CieRunInGpu2=True
+
+Output = output/$(ClusterId).$(ProcId)
+Error  = output/$(ClusterId).$(ProcId).err
+Log    = output/$(ClusterId).$(ProcId).log
+
+transfer_output_files = ""
+
+Queue

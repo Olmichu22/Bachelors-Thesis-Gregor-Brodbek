@@ -18,6 +18,30 @@ from src.utils.import_tools import import_module
 from src.dataset.functions_graph import graph_batch_func
 
 
+def model_setup_training(args, data_config):
+    """
+    Loads the model
+    :param args:
+    :param data_config:
+    :return: model, model_info, network_module, network_options
+    """
+    network_module = import_module(args.network_config, name="_network_module")
+    network_options = {k: ast.literal_eval(v) for k, v in args.network_option}
+
+    if args.gpus:
+        gpus = [int(i) for i in args.gpus.split(",")]  # ?
+        dev = torch.device(gpus[0])
+        print("using GPUs:", gpus)
+    else:
+        gpus = None
+        local_rank = 0
+        dev = torch.device("cpu")
+    model, model_info = network_module.get_model(
+        data_config, args=args, dev=dev, **network_options
+    )
+    return model.mod, model_info, None
+
+
 def to_filelist(args, mode="train"):
     if mode == "train":
         flist = args.data_train
@@ -283,10 +307,9 @@ def test_load(args):
     data_config = SimpleIterDataset({}, args.data_config, for_training=False).config
     return test_loaders, data_config
 
-
 def onnx(args):
     """
-    Saving model as ONNX.
+    Saving model as ONNX usando un DataLoader para formatear los datos correctamente.
     :param args:
     :return:
     """
@@ -295,27 +318,62 @@ def onnx(args):
     _logger.info("Exporting model %s to ONNX" % model_path)
 
     from src.dataset.dataset import DataConfig
-
+    
     data_config = DataConfig.load(
         args.data_config, load_observers=False, load_reweight_info=False
     )
-    model, model_info, _ = model_setup(args, data_config)
-    model.load_state_dict(torch.load(model_path, map_location="cpu"))
+    model, model_info, _ = model_setup_training(args, data_config)
+    model.load_state_dict(torch.load(model_path, map_location="cpu"), strict=False)
     model = model.cpu()
     model.eval()
 
+    # Cargar un ejemplo del conjunto de prueba usando el mismo DataLoader
+    test_loaders, _ = test_load(args)
+    test_loader_fn = list(test_loaders.values())[0]
+    test_loader = test_loader_fn()
+    
+    # Obtener un batch de ejemplo que ya está procesado como grafo DGL
+    for batch_data in test_loader:
+        example_input = batch_data[0]  # El primer elemento debería ser el grafo
+        # Extraer más elementos si están disponibles en el batch
+        # example_mask = batch_data[1] if len(batch_data) > 1 else None
+        # example_labels = batch_data[2] if len(batch_data) > 2 else torch.zeros(example_input.number_of_nodes(), dtype=torch.long)
+        break
+    
+    # Crear un wrapper para adaptar la entrada al formato esperado por ONNX
+    class ONNXModelWrapper(torch.nn.Module):
+        def __init__(self, original_model):
+            super().__init__()
+            self.model = original_model
+            self.example_input = example_input
+            # self.example_mask = example_mask
+            # self.example_labels = example_labels
+            
+        def forward(self, dummy_input):
+            """Este wrapper toma un tensor dummy pero realmente usa el ejemplo precargado"""
+            # Crear labels: en modo inferencia podemos usar un tensor de ceros
+            mask = None
+            num_nodes = self.example_input.number_of_nodes()
+            labels = torch.zeros(num_nodes, dtype=torch.long)
+            
+            # Llamar al modelo con todos los argumentos requeridos
+            return self.model(self.example_input, 0, mask, labels)  # 0 es step_count
+    
+    # Crear el wrapper
+    wrapper_model = ONNXModelWrapper(model)
+    
+    # Crear un tensor dummy para alimentar la exportación ONNX
+    dummy_input = torch.ones(1, dtype=torch.float32)
+    
     os.makedirs(os.path.dirname(args.export_onnx), exist_ok=True)
-    inputs = tuple(
-        torch.ones(model_info["input_shapes"][k], dtype=torch.float32)
-        for k in model_info["input_names"]
-    )
+    
     torch.onnx.export(
-        model,
-        inputs,
+        wrapper_model,
+        dummy_input,
         args.export_onnx,
-        input_names=model_info["input_names"],
+        input_names=["input_data"],
         output_names=model_info["output_names"],
-        dynamic_axes=model_info.get("dynamic_axes", None),
+        dynamic_axes={"input_data": {0: "batch_size"}},
         opset_version=13,
     )
     _logger.info("ONNX model saved to %s", args.export_onnx)
@@ -325,6 +383,48 @@ def onnx(args):
     )
     data_config.export_json(preprocessing_json)
     _logger.info("Preprocessing parameters saved to %s", preprocessing_json)
+
+# def onnx(args):
+#     """
+#     Saving model as ONNX.
+#     :param args:
+#     :return:
+#     """
+#     assert args.export_onnx.endswith(".onnx")
+#     model_path = args.model_prefix
+#     _logger.info("Exporting model %s to ONNX" % model_path)
+
+#     from src.dataset.dataset import DataConfig
+
+#     data_config = DataConfig.load(
+#         args.data_config, load_observers=False, load_reweight_info=False
+#     )
+#     model, model_info, _ = model_setup_training(args, data_config)
+#     model.load_state_dict(torch.load(model_path, map_location="cpu"), strict=False)
+#     model = model.cpu()
+#     model.eval()
+
+#     os.makedirs(os.path.dirname(args.export_onnx), exist_ok=True)
+#     inputs = tuple(
+#         torch.ones(model_info["input_shapes"][k], dtype=torch.float32)
+#         for k in model_info["input_names"]
+#     )
+#     torch.onnx.export(
+#         model,
+#         inputs,
+#         args.export_onnx,
+#         input_names=model_info["input_names"],
+#         output_names=model_info["output_names"],
+#         dynamic_axes=model_info.get("dynamic_axes", None),
+#         opset_version=13,
+#     )
+#     _logger.info("ONNX model saved to %s", args.export_onnx)
+
+#     preprocessing_json = os.path.join(
+#         os.path.dirname(args.export_onnx), "preprocess.json"
+#     )
+#     data_config.export_json(preprocessing_json)
+#     _logger.info("Preprocessing parameters saved to %s", preprocessing_json)
 
 
 def flops(model, model_info):

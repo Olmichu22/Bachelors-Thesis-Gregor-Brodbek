@@ -21,6 +21,8 @@ def get_model(data_config, args, dev, **kwargs):
     # pf_features_dims = len(data_config.input_dicts['pf_features'])
     # num_classes = len(data_config.label_value)
     print("Model options: ", kwargs)
+    # Drop from kwargs "for_inference"
+    kwargs.pop("for_inference", None)
     model = GraphTransformerNetWrapper(args, dev, **kwargs)
 
     model_info = {

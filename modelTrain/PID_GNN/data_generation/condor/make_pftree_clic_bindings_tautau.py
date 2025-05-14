@@ -128,6 +128,8 @@ for i, event in enumerate(reader.get("events")):
     else:
         event_number[0] += 1
         t.Fill()
-
 t.SetDirectory(out_root)
+print("Saving TTree in ", output_file)
 t.Write()
+# out_root.Close()
+print("Tree saved")

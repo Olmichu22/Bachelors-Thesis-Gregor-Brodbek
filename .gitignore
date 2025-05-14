@@ -1,3 +1,7 @@
+# Onnx
+*.onnx
+*.npy
+*.pth
 # root files
 *.root
 

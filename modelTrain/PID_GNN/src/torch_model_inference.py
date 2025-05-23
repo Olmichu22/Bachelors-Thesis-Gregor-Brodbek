@@ -103,17 +103,20 @@ def main():
         )
 
   logger = logging.getLogger("InferenceLogger")
+  # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+  device = "cpu"
+  logger.info(f"Device: {device}")
   
   if not os.path.exists(output_path):
     logger.info("Model not found, creating wrapper")
     # 1) cargar modelo original
     old = OldModel.load_from_checkpoint(ckpt_path, args=None, dev=0,
-                                        strict=False).cpu().eval()
+                                        strict=False).to(device).eval()
     # 2) construir wrapper
-    model = InferenceWrapper(old).cpu().eval()
+    model = InferenceWrapper(old).to(device).eval()
     logger.info("Model loaded!")
   else:
-    model = torch.jit.load(output_path)
+    model = torch.jit.load(output_path, map_location = device).eval()
     logger.info("Model loaded from file!")
 
   
@@ -148,7 +151,9 @@ def main():
     logger.info(f"Error when loading {input_file_path}: {e}")
     return
   N_events = len(input_data)//2
-  
+  logger.info(f"Len of inference file: {len(input_data)}")
+  logger.info(f"Number of events: {N_events}")
+  # exit()
   pos_to_label = {0:"e",          
               1:"mu",
               2:"pi_pi0",
@@ -176,12 +181,19 @@ def main():
         if i > 9:
           break
       # Cargamos el fichero de entrada
-      x1 = load_graph_tensor(input_data[f"tau_{i}_1"])  # (1,11)
-      x2 = load_graph_tensor(input_data[f"tau_{i}_2"])
+      if np.isnan(input_data[f"tau_{i}_1"]).all():
+        logger.info(f"Event {i} not found")
+        result_labels["num-tau1"].append(-999)
+        result_labels["num-tau2"].append(-999)
+        result_labels["id-tau1"].append(-999)
+        result_labels["id-tau2"].append(-999)
+        continue
+      x1 = load_graph_tensor(input_data[f"tau_{i}_1"]).to(device)  # (1,11)
+      x2 = load_graph_tensor(input_data[f"tau_{i}_2"]).to(device)
       logits = model(x1)                               # (1,9)
-      probs1  = torch.sigmoid(logits)                  # multiclase independiente
+      probs1  = torch.sigmoid(logits).cpu()               # multiclase independiente
       logits = model(x2)                               # (1,9)
-      probs2  = torch.sigmoid(logits)                  # multiclase independiente
+      probs2  = torch.sigmoid(logits).cpu()                  # multiclase independiente
       # Guardamos los resultados
       label1 = np.argmax(probs1.numpy())
       label2 = np.argmax(probs2.numpy())

@@ -178,3 +178,28 @@ def split_taus(input_data, inputs):
     input_data1 = input_data[mask_tau1]
     input_data2 = input_data[mask_tau2]
     return input_data1, input_data2
+
+def associate_hemispheres_with_taus(input_data1, input_data2, taus):
+    """Asocia cada hemisferio con el tau correspondiente usando la dirección del tau."""
+    
+    # Obtener dirección de cada tau
+    tau_directions = []
+    for key, tau in taus.items():
+        px = tau.getMomentum().X()
+        py = tau.getMomentum().Y()
+        pz = tau.getMomentum().Z()
+        tau_directions.append((px, py, pz))
+    
+    # Calcular la dirección promedio de cada hemisferio
+    hemisphere1_direction = input_data1[:, 0:3].mean(axis=0)  # Asumiendo x,y,z en primeras columnas
+    # hemisphere2_direction = input_data2[:, 0:3].mean(axis=0)
+    
+    # Calcular cosenos de ángulos entre direcciones
+    cos_h1_tau1 = np.dot(hemisphere1_direction, tau_directions[0]) / (np.linalg.norm(hemisphere1_direction) * np.linalg.norm(tau_directions[0]))
+    cos_h1_tau2 = np.dot(hemisphere1_direction, tau_directions[1]) / (np.linalg.norm(hemisphere1_direction) * np.linalg.norm(tau_directions[1]))
+    
+    # El hemisferio 1 corresponde al tau 1 si el coseno es mayor
+    if cos_h1_tau1 > cos_h1_tau2:
+        return {"tau1": input_data1, "tau2": input_data2}
+    else:
+        return {"tau1": input_data2, "tau2": input_data1}

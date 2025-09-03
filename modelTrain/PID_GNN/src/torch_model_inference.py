@@ -104,6 +104,7 @@ def main():
 
   logger = logging.getLogger("InferenceLogger")
   # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+   # Tengo errores con cuda parece...
   device = "cpu"
   logger.info(f"Device: {device}")
   

@@ -20,6 +20,34 @@ GAMMA = "γ"
 BHABHA = "Bhabha"
 QQ = "qq"
 
+# --- helpers de filtrado (añádelos cerca de los imports) ---
+def _keys_as_present(df: pd.DataFrame, keys):
+    """Devuelve la lista de keys presentes en el índice/columnas del df,
+    conservando el orden dado por 'keys'."""
+    if not keys:
+        return list(df.index), list(df.columns)
+    keys = [int(k) for k in keys]
+    idx = [k for k in keys if k in df.index]
+    cols = [k for k in keys if k in df.columns]
+    return idx, cols
+
+def filter_cm_counts(cm_df: pd.DataFrame, keys):
+    """Filtra cuentas (no normalizadas)."""
+    if not keys:
+        return cm_df
+    idx, cols = _keys_as_present(cm_df, keys)
+    return cm_df.loc[idx, cols]
+
+def filter_cm_after_norm(cm_norm_df: pd.DataFrame, keys):
+    """
+    Filtra la CM ya normalizada por filas (hecha ANTES del filtrado),
+    para evitar porcentajes ficticios. No re-normaliza.
+    """
+    if not keys:
+        return cm_norm_df
+    idx, cols = _keys_as_present(cm_norm_df, keys)
+    return cm_norm_df.loc[idx, cols]
+
 
 def id_to_key(event_id, photons=False):
     if photons:
@@ -30,8 +58,12 @@ def id_to_key(event_id, photons=False):
                 key = f"{E}"
             elif event_id <= -20:
                 key = f"h{N}"
-            else:
+            elif event_id == -2:
+                key = "Unmatched"
+            elif event_id == -1:
                 key = "Unknown"
+            else:
+                key = "Unknown ID"  
         elif event_id == 0:
             key = f"h"
         elif event_id == 1:
@@ -55,8 +87,12 @@ def id_to_key(event_id, photons=False):
                 key = BHABHA
             elif event_id == -222:
                 key = QQ
-            else:
+            elif event_id == -2:
+                key = "Unmatched"
+            elif event_id == -1:
                 key = "Unknown"
+            else:
+                key = "Unknown ID" 
         elif event_id == 0:
             key = f"{TAU} → {PI}{NEUTRINO}"
         elif event_id == 1:
@@ -314,8 +350,8 @@ def crossPseudoCMs(
                         ),
                     )
 
-            plt.ylabel("True label", fontsize=15)
-            plt.xlabel("Predicted label", fontsize=15)
+            plt.ylabel("Desintegración simulada", fontsize=15)
+            plt.xlabel("Desintegración identificada", fontsize=15)
             plt.tight_layout()
 
             plt.savefig(
@@ -356,8 +392,8 @@ def crossPseudoCMs(
                         ),
                     )
 
-            plt.ylabel("True label", fontsize=15)
-            plt.xlabel("Predicted label", fontsize=15)
+            plt.ylabel("Desintegración simulada", fontsize=15)
+            plt.xlabel("Desintegración identificada", fontsize=15)
             plt.tight_layout()
 
             plt.savefig(
@@ -384,8 +420,8 @@ def PlotCMs(cm, draw_path=None, name="CM Matrix GATr", normalize=False):
     x_labels = [id_to_key(int(x), False) for x in x_labels]
     y_labels = cm.index
     y_labels = [id_to_key(int(x), False) for x in y_labels]
-    plt.xticks(pred_tick_marks, x_labels, rotation=45)
-    plt.yticks(real_tick_marks, y_labels)
+    plt.xticks(pred_tick_marks, x_labels, rotation=45, fontsize=14)
+    plt.yticks(real_tick_marks, y_labels, fontsize=14)
     # Añadir los valores dentro de cada celda
     for i in range(len(cm.index)):
         for j in range(len(cm.columns)):
@@ -393,26 +429,29 @@ def PlotCMs(cm, draw_path=None, name="CM Matrix GATr", normalize=False):
                 plt.text(
                     j,
                     i,
-                    f"{cm.iloc[i, j]:.2f}",
+                    f"{cm.iloc[i, j] * 100:.2f}%",
                     ha="center",
                     va="center",
                     color="white" if cm.iloc[i, j] > cm.max().max() / 2 else "black",
+                    # fontsize = 15
                 )
             else:
                 plt.text(
                     j,
                     i,
-                    f"{cm.iloc[i, j]:.1f}",
+                    f"{cm.iloc[i, j]}",
                     ha="center",
                     va="center",
                     color="white" if cm.iloc[i, j] > cm.max().max() / 2 else "black",
+                    # fontsize = 15
                 )
-    plt.ylabel("True label", fontsize=15)
-    plt.xlabel("Predicted label", fontsize=15)
+    plt.ylabel("Desintegración simulada", fontsize=15)
+    plt.xlabel("Desintegración identificada", fontsize=15)
     plt.tight_layout()
     if draw_path is not None:
         save_name = name.replace(" ", "_")
         plt.savefig(os.path.join(draw_path, f"{save_name}.png"), bbox_inches="tight")
+        # print(f"Guardando imagen en {os.path.join(draw_path, f"{save_name}.png")}")
         plt.close()
     else:
         plt.show()
@@ -422,13 +461,15 @@ def PlotCMs(cm, draw_path=None, name="CM Matrix GATr", normalize=False):
 # ---------------------------------------------------------------
 # Argparse
 parser = argparse.ArgumentParser()
-parser.add_argument(
-    "-i",
-    "--input",
-    type=str,
-    default="inference_data",
-    help="Input file with predictions",
-)
+# parser.add_argument(
+#     "-i",
+#     "--input",
+#     type=str,
+#     default="inference_data",
+#     help="Input file with predictions",
+# )
+parser.add_argument("--c-1", type=str, default="inference_data/result_labels_MLID.csv", help="Model 1 to compare against")
+parser.add_argument("--c-2", type=str, default="inference_data/result_labels_MLPF.csv", help="Model 2 to compare against")
 parser.add_argument(
     "-o",
     "--output",
@@ -440,15 +481,19 @@ parser.add_argument(
     "-d", "--draw", type=str, default=False, help="Output path of figures"
 )
 parser.add_argument("-k", "--decay-keys", nargs="+", type=int, default=[])
+
 args = parser.parse_args()
 
-input_file = args.input
+# input_file = args.input
 output_path = args.output
 draw_path = args.draw
 decay_keys = args.decay_keys
+compare_1 = args.c_1
+compare_2 = args.c_2
 
-input_file_gatr = os.path.join(input_file, "result_labels.csv")
-input_file_pfo = os.path.join(input_file, "result_labels_pfo.csv")
+input_file_compare_1 = compare_1
+input_file_compare_2 = compare_2
+# input_file_pfo
 # ---------------------------------------------------------------
 if not os.path.exists(output_path):
     os.makedirs(output_path)
@@ -467,35 +512,53 @@ logger = logging.getLogger("InferenceEvalLogger")
 
 logger.info("Starting predictions evaluation...")
 
-if draw_path != "False":
+if not draw_path:
     draw_path = os.path.join(output_path, "Figures")
     if not os.path.exists(draw_path):
         os.makedirs(draw_path)
-    logger.info(f"Figures will be saved in {draw_path}")
 else:
-    draw_path = None
+    draw_path = os.path.join(output_path, draw_path)
+# else:
+    # draw_path = None
 
+if not os.path.exists(draw_path):
+    os.makedirs(draw_path)
+    
+logger.info(f"Figures will be saved in {draw_path}")
+# exit(0)
 # ---------------------------------------------------------------
 # Load the predictions
 try:
-    result_labels_gatr = pd.read_csv(input_file_gatr)
-    logger.info(f"Predictions loaded from {input_file_gatr}")
-    result_labels_gatr = event_to_tau(
-        result_labels_gatr, model="GATr", outputpath=output_path
+    if "MLID" in input_file_compare_1:
+        model_1 = "MLID"
+    elif "pfo" in input_file_compare_1:
+        model_1 = "PandoraPFO"
+    elif "MLPF" in input_file_compare_1:
+        model_1 = "MLPF"
+    result_labels_compare_1 = pd.read_csv(input_file_compare_1)
+    logger.info(f"Predictions loaded from {input_file_compare_1}")
+    result_labels_compare_1 = event_to_tau(
+        result_labels_compare_1, model=model_1, outputpath=output_path
     )
 except FileNotFoundError as e:
-    logger.error(f"File {input_file_gatr} not found.")
+    logger.error(f"File {input_file_compare_1} not found.")
     raise e
 
 try:
-    result_labels_pfo = pd.read_csv(input_file_pfo)
-    logger.info(f"Predictions loaded from {input_file_pfo}")
-    result_labels_pfo = event_to_tau(
-        result_labels_pfo, model="PFO", outputpath=output_path
+    if "MLID" in input_file_compare_2:
+        model_2 = "MLID"
+    elif "pfo" in input_file_compare_2:
+        model_2= "PandoraPFO"
+    elif "MLPF" in input_file_compare_2:
+        model_2 = "MLPF"
+    result_labels_compare_2 = pd.read_csv(input_file_compare_2)
+    logger.info(f"Predictions loaded from {input_file_compare_2}")
+    result_labels_compare_2 = event_to_tau(
+        result_labels_compare_2, model=model_2, outputpath=output_path
     )
 except FileNotFoundError as e:
-    logger.error(f"File {input_file_pfo} not found.")
-    result_labels_pfo = None
+    logger.error(f"File {input_file_compare_2} not found.")
+    result_labels_compare_2 = None
 
 # ---------------------------------------------------------------
 summary_evaluation_results = {
@@ -509,75 +572,84 @@ logger.info("Starting evaluation of predictions...")
 # Loop over the predictions
 from copy import deepcopy
 
-summary_evaluation_results_gatr = deepcopy(summary_evaluation_results)
-summary_evaluation_results_pfo = deepcopy(summary_evaluation_results)
-cm_matrix_gatr, fails_tau_gatr = evaluate_result_labels(
-    result_labels_gatr, summary_evaluation_results_gatr, logger, output_path, "GATr"
+summary_evaluation_results_1 = deepcopy(summary_evaluation_results)
+summary_evaluation_results_2 = deepcopy(summary_evaluation_results)
+cm_matrix_model_1, fails_tau_model_1 = evaluate_result_labels(
+    result_labels_compare_1, summary_evaluation_results_1, logger, output_path, model_1
 )
-cm_matrix_gatr_norm = cm_matrix_gatr.div(  # DataFrame original
-    cm_matrix_gatr.sum(axis=1), axis=0
+cm_matrix_model_1_norm = cm_matrix_model_1.div(  # DataFrame original
+    cm_matrix_model_1.sum(axis=1), axis=0
 ).fillna(  # divide cada fila por su suma
     0
 )  # evita NaN cuando la fila suma 0
-PlotCMs(cm_matrix_gatr, draw_path=draw_path, name="GATr Confusion Matrix")
+# Filtrar para mostrar (después de normalizar)
+cm_matrix_model_1_show   = filter_cm_counts(cm_matrix_model_1, decay_keys)
+cm_matrix_model_1_norm_show = filter_cm_after_norm(cm_matrix_model_1_norm, decay_keys)
+
+PlotCMs(cm_matrix_model_1_show, draw_path=draw_path, name=f"Matriz de confusión ({model_1})")
 PlotCMs(
-    cm_matrix_gatr_norm,
+    cm_matrix_model_1_norm_show,
     draw_path=draw_path,
-    name="GATr Confusion Matrix normalized",
+    name=f"Matriz de confusión normalizada ({model_1})",
     normalize=True,
 )
 
 
-if result_labels_pfo is not None:
-    cm_matrix_pfo, fails_tau_pfo = evaluate_result_labels(
-        result_labels_pfo, summary_evaluation_results_pfo, logger, output_path, "PFO"
+if result_labels_compare_2 is not None:
+    cm_matrix_model_2, fails_tau_model_2 = evaluate_result_labels(
+        result_labels_compare_2, summary_evaluation_results_2, logger, output_path, model_2
     )
-    cm_incorrect_gatr = incorrectCM(result_labels_pfo, fails_tau_gatr)
-    cm_incorrect_pfo = incorrectCM(result_labels_gatr, fails_tau_pfo)
-    PlotCMs(
-        cm_incorrect_gatr,
-        draw_path=draw_path,
-        name="Classic Method preds when GATr fails",
-    )
-    PlotCMs(
-        cm_incorrect_pfo,
-        draw_path=draw_path,
-        name="GATr Method preds when PlotCMs fails",
-    )
-    PlotCMs(cm_matrix_pfo, draw_path=draw_path, name="PFO Confusion Matrix")
+    cm_incorrect_model_1 = incorrectCM(result_labels_compare_2, fails_tau_model_1)
+    cm_incorrect_model_2 = incorrectCM(result_labels_compare_1, fails_tau_model_2)
     # Normalize the confusion matrix by row (i.e. by the number of samples)
-    cm_incorrect_gatr_norm = cm_incorrect_gatr.div(  # DataFrame original
-        cm_incorrect_gatr.sum(axis=1), axis=0
+    cm_incorrect_model_1_norm = cm_incorrect_model_1.div(  # DataFrame original
+        cm_incorrect_model_1.sum(axis=1), axis=0
     ).fillna(  # divide cada fila por su suma
         0
     )  # evita NaN cuando la fila suma 0
-    cm_incorrect_pfo_norm = cm_incorrect_pfo.div(  # DataFrame original
-        cm_incorrect_pfo.sum(axis=1), axis=0
+    cm_incorrect_model_2_norm = cm_incorrect_model_2.div(  # DataFrame original
+        cm_incorrect_model_2.sum(axis=1), axis=0
     ).fillna(  # divide cada fila por su suma
         0
     )  # evita NaN cuando la fila suma 0
-    cm_matrix_pfo_norm = cm_matrix_pfo.div(  # DataFrame original
-        cm_matrix_pfo.sum(axis=1), axis=0
+    cm_matrix_model_2_norm = cm_matrix_model_2.div(  # DataFrame original
+        cm_matrix_model_2.sum(axis=1), axis=0
     ).fillna(  # divide cada fila por su suma
         0
     )  # evita NaN cuando la fila suma 0
-
+    cm_matrix_model_2_show   = filter_cm_counts(cm_matrix_model_2, decay_keys)
+    cm_matrix_model_2_norm_show = filter_cm_after_norm(cm_matrix_model_2_norm, decay_keys)
+    PlotCMs(cm_matrix_model_2_show, draw_path=draw_path, name=f"Matriz de confusión ({model_2})")
     PlotCMs(
-        cm_incorrect_gatr_norm,
+        cm_matrix_model_2_norm_show,
         draw_path=draw_path,
-        name="Classic Method preds when GATr fails normalized",
+        name=f"Matriz de confusión normalizada ({model_2})",
+        normalize=True,
+    )
+    cm_incorrect_model_1_show = filter_cm_counts(cm_incorrect_model_1, decay_keys)
+    cm_incorrect_model_2_show = filter_cm_counts(cm_incorrect_model_2, decay_keys)
+    cm_incorrect_model_1_norm_show = filter_cm_after_norm(cm_incorrect_model_1_norm, decay_keys)
+    cm_incorrect_model_2_norm_show = filter_cm_after_norm(cm_incorrect_model_2_norm, decay_keys)
+    PlotCMs(
+        cm_incorrect_model_1_show,
+        draw_path=draw_path,
+        name=f"{model_2} preds when {model_1} fails",
+    )
+    PlotCMs(
+        cm_incorrect_model_2_show,
+        draw_path=draw_path,
+        name=f"{model_1} Method preds when {model_2} fails",
+    )
+    PlotCMs(
+        cm_incorrect_model_1_norm_show,
+        draw_path=draw_path,
+        name=f"{model_2} preds when {model_1} fails normalized",
         normalize=True,
     )
     PlotCMs(
-        cm_incorrect_pfo_norm,
+        cm_incorrect_model_2_norm_show,
         draw_path=draw_path,
-        name="GATr Method preds when PlotCMs fails normalized",
-        normalize=True,
-    )
-    PlotCMs(
-        cm_matrix_pfo_norm,
-        draw_path=draw_path,
-        name="PFO Confusion Matrix normalized",
+        name=f"{model_1} Method preds when {model_2} fails normalized",
         normalize=True,
     )
 

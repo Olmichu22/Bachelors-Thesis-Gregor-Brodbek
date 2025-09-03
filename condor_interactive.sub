@@ -1,0 +1,12 @@
+#+CieRunInGpu=True
++CieRunInGpu3=True
+
+
+output = tau_trained_models/$(ClusterId).$(ProcId).out
+error  = tau_trained_models/$(ClusterId).$(ProcId).err
+log    = tau_trained_models/$(ClusterId).$(ProcId).log
+
+executable = 
+arguments  =
+queue
+
